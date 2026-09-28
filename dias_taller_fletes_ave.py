@@ -9,9 +9,9 @@ from sqlalchemy import create_engine
 # ==========================================
 # CONFIGURACIÓN DE LA BASE DE DATOS SUPABASE (POSTGRESQL)
 # ==========================================
-def obtener_conexion():
+def obtener_motor():
     """
-    Crea la conexión a Supabase usando la URL guardada en los secretos de Streamlit.
+    Crea y retorna un motor de SQLAlchemy optimizado para Supabase con pool_pre_ping.
     """
     db_url = st.secrets["postgres"]["url"]
     if not db_url.startswith("postgresql+psycopg2://"):
@@ -20,21 +20,19 @@ def obtener_conexion():
         separator = "&" if "?" in db_url else "?"
         db_url = f"{db_url}{separator}sslmode=require"
         
-    engine = create_engine(db_url)
-    return engine.connect()
+    engine = create_engine(
+        db_url, 
+        connect_args={"prepare_threshold": None},
+        pool_pre_ping=True,
+        pool_recycle=300
+    )
+    return engine
 
 def init_db():
     """
     Inicializa las tablas necesarias en Supabase si no existen.
     """
-    db_url = st.secrets["postgres"]["url"]
-    if not db_url.startswith("postgresql+psycopg2://"):
-        db_url = db_url.replace("postgresql://", "postgresql+psycopg2://")
-    if "sslmode" not in db_url:
-        separator = "&" if "?" in db_url else "?"
-        db_url = f"{db_url}{separator}sslmode=require"
-        
-    engine = create_engine(db_url, connect_args={"prepare_threshold": None})
+    engine = obtener_motor()
 
     with engine.begin() as conn:
         # Tabla de Registros de Taller
@@ -85,37 +83,19 @@ init_db()
 
 # Funciones de apoyo para interactuar con la Base de Datos
 def cargar_operadores():
-    db_url = st.secrets["postgres"]["url"]
-    if not db_url.startswith("postgresql+psycopg2://"):
-        db_url = db_url.replace("postgresql://", "postgresql+psycopg2://")
-    if "sslmode" not in db_url:
-        separator = "&" if "?" in db_url else "?"
-        db_url = f"{db_url}{separator}sslmode=require"
-    engine = create_engine(db_url)
+    engine = obtener_motor()
     df_ops = pd.read_sql("SELECT nombre FROM operadores", engine)
     return df_ops["nombre"].tolist()
 
 def obtener_tarifa():
-    db_url = st.secrets["postgres"]["url"]
-    if not db_url.startswith("postgresql+psycopg2://"):
-        db_url = db_url.replace("postgresql://", "postgresql+psycopg2://")
-    if "sslmode" not in db_url:
-        separator = "&" if "?" in db_url else "?"
-        db_url = f"{db_url}{separator}sslmode=require"
-    engine = create_engine(db_url)
+    engine = obtener_motor()
     with engine.connect() as conn:
         res = conn.execute(pd.text("SELECT valor FROM config WHERE clave = 'valor_dia'")).fetchone()
         val = res[0] if res else 416.67
     return float(val)
 
 def cargar_registros():
-    db_url = st.secrets["postgres"]["url"]
-    if not db_url.startswith("postgresql+psycopg2://"):
-        db_url = db_url.replace("postgresql://", "postgresql+psycopg2://")
-    if "sslmode" not in db_url:
-        separator = "&" if "?" in db_url else "?"
-        db_url = f"{db_url}{separator}sslmode=require"
-    engine = create_engine(db_url)
+    engine = obtener_motor()
     df = pd.read_sql("SELECT * FROM registros", engine)
     return df.to_dict("records")
 
@@ -194,7 +174,7 @@ st.markdown("---")
 # ==========================================
 if perfil == "1. Capturista":
     st.subheader("📝 Módulo: Capturista (Registro Inicial)")
-    st.markdown("Todos los campos marcados com asterisco (**\***) son **obligatorios** para poder registrar la información.")
+    st.markdown("Todos los campos marcados con asterisco (**\***) son **obligatorios** para poder registrar la información.")
 
     lista_operadores = cargar_operadores()
     valor_unitario_actual = obtener_tarifa()
@@ -234,14 +214,7 @@ if perfil == "1. Capturista":
             estado_inicial = "Pendiente de Aprobación (Operaciones)"
             evidencia_bytes = evidencia.read()
 
-            db_url = st.secrets["postgres"]["url"]
-            if not db_url.startswith("postgresql+psycopg2://"):
-                db_url = db_url.replace("postgresql://", "postgresql+psycopg2://")
-            if "sslmode" not in db_url:
-                separator = "&" if "?" in db_url else "?"
-                db_url = f"{db_url}{separator}sslmode=require"
-            engine = create_engine(db_url)
-            
+            engine = obtener_motor()
             with engine.begin() as conn:
                 conn.execute(
                     pd.text("""
@@ -318,14 +291,7 @@ elif perfil == "2. Jefe de Operaciones (Admin)":
 
                     if st.button("✔️ Autorizar como Jefe de Operaciones"):
                         fecha_op = datetime.now(ZoneInfo("America/Monterrey")).strftime("%Y-%m-%d %H:%M")
-                        db_url = st.secrets["postgres"]["url"]
-                        if not db_url.startswith("postgresql+psycopg2://"):
-                            db_url = db_url.replace("postgresql://", "postgresql+psycopg2://")
-                        if "sslmode" not in db_url:
-                            separator = "&" if "?" in db_url else "?"
-                            db_url = f"{db_url}{separator}sslmode=require"
-                        engine = create_engine(db_url)
-                        
+                        engine = obtener_motor()
                         with engine.begin() as conn:
                             conn.execute(
                                 pd.text("""
@@ -354,14 +320,7 @@ elif perfil == "2. Jefe de Operaciones (Admin)":
                 step=10.0,
             )
             if st.button("💾 Actualizar Tarifa Estándar"):
-                db_url = st.secrets["postgres"]["url"]
-                if not db_url.startswith("postgresql+psycopg2://"):
-                    db_url = db_url.replace("postgresql://", "postgresql+psycopg2://")
-                if "sslmode" not in db_url:
-                    separator = "&" if "?" in db_url else "?"
-                    db_url = f"{db_url}{separator}sslmode=require"
-                engine = create_engine(db_url)
-                
+                engine = obtener_motor()
                 with engine.begin() as conn:
                     conn.execute(
                         pd.text("UPDATE config SET valor = :val WHERE clave = 'valor_dia'"),
@@ -376,14 +335,7 @@ elif perfil == "2. Jefe de Operaciones (Admin)":
             if st.button("Registrar Operador"):
                 if nuevo_operador_nombre.strip():
                     try:
-                        db_url = st.secrets["postgres"]["url"]
-                        if not db_url.startswith("postgresql+psycopg2://"):
-                            db_url = db_url.replace("postgresql://", "postgresql+psycopg2://")
-                        if "sslmode" not in db_url:
-                            separator = "&" if "?" in db_url else "?"
-                            db_url = f"{db_url}{separator}sslmode=require"
-                        engine = create_engine(db_url)
-                        
+                        engine = obtener_motor()
                         with engine.begin() as conn:
                             conn.execute(
                                 pd.text("INSERT INTO operadores (nombre) VALUES (:nombre)"),
@@ -404,14 +356,7 @@ elif perfil == "2. Jefe de Operaciones (Admin)":
                 operador_a_eliminar = st.selectbox("Seleccione el Operador a Eliminar:", lista_operadores, key="del_op_select")
                 if st.button("🗑️ Eliminar Operador Seleccionado", type="primary"):
                     if len(lista_operadores) > 1:
-                        db_url = st.secrets["postgres"]["url"]
-                        if not db_url.startswith("postgresql+psycopg2://"):
-                            db_url = db_url.replace("postgresql://", "postgresql+psycopg2://")
-                        if "sslmode" not in db_url:
-                            separator = "&" if "?" in db_url else "?"
-                            db_url = f"{db_url}{separator}sslmode=require"
-                        engine = create_engine(db_url)
-                        
+                        engine = obtener_motor()
                         with engine.begin() as conn:
                             conn.execute(
                                 pd.text("DELETE FROM operadores WHERE nombre = :nombre"),
@@ -457,14 +402,7 @@ elif perfil == "2. Jefe de Operaciones (Admin)":
 
                         if actualizar_btn:
                             nuevo_total = float(dias_edit) * float(val_unit_edit)
-                            db_url = st.secrets["postgres"]["url"]
-                            if not db_url.startswith("postgresql+psycopg2://"):
-                                db_url = db_url.replace("postgresql://", "postgresql+psycopg2://")
-                            if "sslmode" not in db_url:
-                                separator = "&" if "?" in db_url else "?"
-                                db_url = f"{db_url}{separator}sslmode=require"
-                            engine = create_engine(db_url)
-                            
+                            engine = obtener_motor()
                             with engine.begin() as conn:
                                 conn.execute(
                                     pd.text("""
@@ -485,14 +423,7 @@ elif perfil == "2. Jefe de Operaciones (Admin)":
                             st.rerun()
 
                         if eliminar_btn:
-                            db_url = st.secrets["postgres"]["url"]
-                            if not db_url.startswith("postgresql+psycopg2://"):
-                                db_url = db_url.replace("postgresql://", "postgresql+psycopg2://")
-                            if "sslmode" not in db_url:
-                                separator = "&" if "?" in db_url else "?"
-                                db_url = f"{db_url}{separator}sslmode=require"
-                            engine = create_engine(db_url)
-                            
+                            engine = obtener_motor()
                             with engine.begin() as conn:
                                 conn.execute(
                                     pd.text("DELETE FROM registros WHERE id = :rid"),
@@ -503,14 +434,7 @@ elif perfil == "2. Jefe de Operaciones (Admin)":
 
         with tab4:
             st.markdown("### 🗂️ Historial General de Registros")
-            db_url = st.secrets["postgres"]["url"]
-            if not db_url.startswith("postgresql+psycopg2://"):
-                db_url = db_url.replace("postgresql://", "postgresql+psycopg2://")
-            if "sslmode" not in db_url:
-                separator = "&" if "?" in db_url else "?"
-                db_url = f"{db_url}{separator}sslmode=require"
-            engine = create_engine(db_url)
-            
+            engine = obtener_motor()
             df_mostrar = pd.read_sql(
                 "SELECT id, fecha_creacion, operador, actividades, dias, valor_unitario, total, estado, fecha_aprobacion_operaciones, fecha_aprobacion_gerencia FROM registros",
                 engine,
@@ -631,14 +555,7 @@ elif perfil == "3. Gerente":
 
                 if st.button("✔️ Otorgar Autorización Final (Gerencia)"):
                     fecha_ger = datetime.now(ZoneInfo("America/Monterrey")).strftime("%Y-%m-%d %H:%M")
-                    db_url = st.secrets["postgres"]["url"]
-                    if not db_url.startswith("postgresql+psycopg2://"):
-                        db_url = db_url.replace("postgresql://", "postgresql+psycopg2://")
-                    if "sslmode" not in db_url:
-                        separator = "&" if "?" in db_url else "?"
-                        db_url = f"{db_url}{separator}sslmode=require"
-                    engine = create_engine(db_url)
-                    
+                    engine = obtener_motor()
                     with engine.begin() as conn:
                         conn.execute(
                             pd.text("""
@@ -657,14 +574,7 @@ elif perfil == "3. Gerente":
 
         st.markdown("---")
         st.markdown("### 📋 Historial de Registros Autorizados")
-        db_url = st.secrets["postgres"]["url"]
-        if not db_url.startswith("postgresql+psycopg2://"):
-            db_url = db_url.replace("postgresql://", "postgresql+psycopg2://")
-        if "sslmode" not in db_url:
-            separator = "&" if "?" in db_url else "?"
-            db_url = f"{db_url}{separator}sslmode=require"
-        engine = create_engine(db_url)
-        
+        engine = obtener_motor()
         df_aut = pd.read_sql(
             "SELECT id, fecha_creacion, operador, actividades, dias, valor_unitario, total, estado, fecha_aprobacion_operaciones, fecha_aprobacion_gerencia FROM registros WHERE estado = 'Completado y Autorizado (Gerencia)'",
             engine,
