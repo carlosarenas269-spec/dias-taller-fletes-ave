@@ -3,7 +3,7 @@ import io
 from zoneinfo import ZoneInfo
 import pandas as pd
 import streamlit as st
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 
 # ==========================================
 # CONFIGURACIÓN DE LA BASE DE DATOS SUPABASE (POSTGRESQL)
@@ -23,7 +23,6 @@ def obtener_motor():
         
     engine = create_engine(
         db_url, 
-        connect_args={"prepare_threshold": None},
         pool_pre_ping=True,
         pool_recycle=300
     )
@@ -37,7 +36,7 @@ def init_db():
 
     with engine.begin() as conn:
         # Tabla de Registros de Taller
-        conn.execute(pd.text("""
+        conn.execute(text("""
             CREATE TABLE IF NOT EXISTS registros (
                 id SERIAL PRIMARY KEY,
                 fecha_creacion TEXT,
@@ -54,14 +53,14 @@ def init_db():
         """))
 
         # Tabla de Operadores
-        conn.execute(pd.text("""
+        conn.execute(text("""
             CREATE TABLE IF NOT EXISTS operadores (
                 nombre TEXT UNIQUE
             )
         """))
 
         # Tabla de Configuración (Tarifa)
-        conn.execute(pd.text("""
+        conn.execute(text("""
             CREATE TABLE IF NOT EXISTS config (
                 clave TEXT UNIQUE,
                 valor DOUBLE PRECISION
@@ -69,16 +68,16 @@ def init_db():
         """))
 
         # Insertar valores iniciales si están vacíos los operadores
-        result = conn.execute(pd.text("SELECT COUNT(*) FROM operadores")).fetchone()
+        result = conn.execute(text("SELECT COUNT(*) FROM operadores")).fetchone()
         if result[0] == 0:
-            conn.execute(pd.text("INSERT INTO operadores (nombre) VALUES (:nombre)"), {"nombre": "Octavio Rodrigo Serrano Saavedra"})
-            conn.execute(pd.text("INSERT INTO operadores (nombre) VALUES (:nombre)"), {"nombre": "Operador 1"})
-            conn.execute(pd.text("INSERT INTO operadores (nombre) VALUES (:nombre)"), {"nombre": "Operador 2"})
+            conn.execute(text("INSERT INTO operadores (nombre) VALUES (:nombre)"), {"nombre": "Octavio Rodrigo Serrano Saavedra"})
+            conn.execute(text("INSERT INTO operadores (nombre) VALUES (:nombre)"), {"nombre": "Operador 1"})
+            conn.execute(text("INSERT INTO operadores (nombre) VALUES (:nombre)"), {"nombre": "Operador 2"})
 
         # Insertar valor inicial de la tarifa si no existe
-        result_config = conn.execute(pd.text("SELECT COUNT(*) FROM config WHERE clave = 'valor_dia'")).fetchone()
+        result_config = conn.execute(text("SELECT COUNT(*) FROM config WHERE clave = 'valor_dia'")).fetchone()
         if result_config[0] == 0:
-            conn.execute(pd.text("INSERT INTO config (clave, valor) VALUES ('valor_dia', 416.67)"))
+            conn.execute(text("INSERT INTO config (clave, valor) VALUES ('valor_dia', 416.67)"))
 
 init_db()
 
@@ -91,7 +90,7 @@ def cargar_operadores():
 def obtener_tarifa():
     engine = obtener_motor()
     with engine.connect() as conn:
-        res = conn.execute(pd.text("SELECT valor FROM config WHERE clave = 'valor_dia'")).fetchone()
+        res = conn.execute(text("SELECT valor FROM config WHERE clave = 'valor_dia'")).fetchone()
         val = res[0] if res else 416.67
     return float(val)
 
@@ -218,7 +217,7 @@ if perfil == "1. Capturista":
             engine = obtener_motor()
             with engine.begin() as conn:
                 conn.execute(
-                    pd.text("""
+                    text("""
                         INSERT INTO registros (fecha_creacion, operador, actividades, dias, valor_unitario, total, estado, fecha_aprobacion_operaciones, fecha_aprobacion_gerencia, evidencia)
                         VALUES (:fecha_creacion, :operador, :actividades, :dias, :valor_unitario, :total, :estado, :fecha_op, :fecha_ger, :evidencia)
                     """),
@@ -295,7 +294,7 @@ elif perfil == "2. Jefe de Operaciones (Admin)":
                         engine = obtener_motor()
                         with engine.begin() as conn:
                             conn.execute(
-                                pd.text("""
+                                text("""
                                     UPDATE registros 
                                     SET valor_unitario = :val_unit, total = :tot, estado = :est, fecha_aprobacion_operaciones = :f_op
                                     WHERE id = :rid
@@ -324,7 +323,7 @@ elif perfil == "2. Jefe de Operaciones (Admin)":
                 engine = obtener_motor()
                 with engine.begin() as conn:
                     conn.execute(
-                        pd.text("UPDATE config SET valor = :val WHERE clave = 'valor_dia'"),
+                        text("UPDATE config SET valor = :val WHERE clave = 'valor_dia'"),
                         {"val": nuevo_costo_base}
                     )
                 st.success(f"✅ Tarifa estándar actualizada a ${nuevo_costo_base:,.2f} MXN.")
@@ -339,7 +338,7 @@ elif perfil == "2. Jefe de Operaciones (Admin)":
                         engine = obtener_motor()
                         with engine.begin() as conn:
                             conn.execute(
-                                pd.text("INSERT INTO operadores (nombre) VALUES (:nombre)"),
+                                text("INSERT INTO operadores (nombre) VALUES (:nombre)"),
                                 {"nombre": nuevo_operador_nombre.strip()}
                             )
                         st.success(f"✅ Operador '{nuevo_operador_nombre.strip()}' agregado correctamente.")
@@ -360,7 +359,7 @@ elif perfil == "2. Jefe de Operaciones (Admin)":
                         engine = obtener_motor()
                         with engine.begin() as conn:
                             conn.execute(
-                                pd.text("DELETE FROM operadores WHERE nombre = :nombre"),
+                                text("DELETE FROM operadores WHERE nombre = :nombre"),
                                 {"nombre": operador_a_eliminar}
                             )
                         st.success(f"🗑️ El operador '{operador_a_eliminar}' ha sido eliminado correctamente.")
@@ -406,7 +405,7 @@ elif perfil == "2. Jefe de Operaciones (Admin)":
                             engine = obtener_motor()
                             with engine.begin() as conn:
                                 conn.execute(
-                                    pd.text("""
+                                    text("""
                                         UPDATE registros 
                                         SET operador = :op, dias = :dias, actividades = :act, valor_unitario = :vu, total = :tot
                                         WHERE id = :rid
@@ -427,7 +426,7 @@ elif perfil == "2. Jefe de Operaciones (Admin)":
                             engine = obtener_motor()
                             with engine.begin() as conn:
                                 conn.execute(
-                                    pd.text("DELETE FROM registros WHERE id = :rid"),
+                                    text("DELETE FROM registros WHERE id = :rid"),
                                     {"rid": id_a_editar}
                                 )
                             st.success(f"🗑️ ¡Registro #{id_a_editar} eliminado correctamente!")
@@ -559,7 +558,7 @@ elif perfil == "3. Gerente":
                     engine = obtener_motor()
                     with engine.begin() as conn:
                         conn.execute(
-                            pd.text("""
+                            text("""
                                 UPDATE registros 
                                 SET estado = :est, fecha_aprobacion_gerencia = :f_ger
                                 WHERE id = :rid
