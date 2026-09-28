@@ -109,6 +109,17 @@ def cargar_registros():
     df = pd.read_sql("SELECT * FROM registros", engine)
     return df.to_dict("records")
 
+def preparar_imagen(evidencia_binaria):
+    """Convierte de forma segura un memoryview o bytes de PostgreSQL a un formato legible por st.image"""
+    if evidencia_binaria is None:
+        return None
+    try:
+        if isinstance(evidencia_binaria, memoryview):
+            return bytes(evidencia_binaria)
+        return evidencia_binaria
+    except Exception:
+        return evidencia_binaria
+
 st.set_page_config(
     page_title="Sistema de Control - Taller Fletes AVE", layout="wide"
 )
@@ -286,9 +297,10 @@ elif perfil == "2. Jefe de Operaciones (Admin)":
                     st.write(f"**Actividades:** {reg_sel['actividades']}")
                     st.write(f"**Días de Taller:** {reg_sel['dias']}")
 
-                    if reg_sel["evidencia"] is not None:
+                    img_procesada = preparar_imagen(reg_sel["evidencia"])
+                    if img_procesada is not None:
                         st.markdown("**📸 Evidencia Adjunta:**")
-                        st.image(reg_sel["evidencia"], caption=f"Evidencia Registro #{reg_id}", width=400)
+                        st.image(img_procesada, caption=f"Evidencia Registro #{reg_id}", width=400)
 
                     nuevo_val_unit = st.number_input(
                         "Modificar Valor Unitario ($):",
@@ -392,9 +404,10 @@ elif perfil == "2. Jefe de Operaciones (Admin)":
                 registro_encontrado = next((r for r in registros if r["id"] == id_a_editar), None)
 
                 if registro_encontrado:
-                    if registro_encontrado["evidencia"] is not None:
+                    img_procesada_edit = preparar_imagen(registro_encontrado["evidencia"])
+                    if img_procesada_edit is not None:
                         st.markdown("**📸 Evidencia actual guardada:**")
-                        st.image(registro_encontrado["evidencia"], width=300)
+                        st.image(img_procesada_edit, width=300)
 
                     with st.form("form_edicion_registro"):
                         op_edit = st.selectbox(
@@ -559,9 +572,10 @@ elif perfil == "3. Gerente":
                 st.write(f"**Total Autorizado por Operaciones:** ${reg_sel_ger['total']:,.2f} MXN")
                 st.write(f"**Fecha Visto Bueno Operaciones:** {reg_sel_ger['fecha_aprobacion_operaciones']}")
 
-                if reg_sel_ger["evidencia"] is not None:
+                img_procesada_ger = preparar_imagen(reg_sel_ger["evidencia"])
+                if img_procesada_ger is not None:
                     st.markdown("**📸 Evidencia Adjunta:**")
-                    st.image(reg_sel_ger["evidencia"], caption=f"Evidencia Registro #{reg_id_ger}", width=400)
+                    st.image(img_procesada_ger, caption=f"Evidencia Registro #{reg_id_ger}", width=400)
 
                 if st.button("✔️ Otorgar Autorización Final (Gerencia)"):
                     fecha_ger = datetime.now(ZoneInfo("America/Monterrey")).strftime("%Y-%m-%d %H:%M")
