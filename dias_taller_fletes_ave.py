@@ -92,10 +92,15 @@ def init_db():
 init_db()
 
 # Funciones de apoyo para interactuar con la Base de Datos
-def cargar_operadores():
-    engine = obtener_motor()
-    df_ops = pd.read_sql("SELECT nombre FROM operadores", engine)
-    return df_ops["nombre"].tolist()
+def cargar_operadores_db():
+    try:
+        engine = obtener_motor()
+        df_ops = pd.read_sql("SELECT nombre FROM operadores", engine)
+        if not df_ops.empty:
+            return df_ops["nombre"].tolist()
+    except Exception:
+        pass
+    return ["Octavio Rodrigo Serrano Saavedra"]
 
 def obtener_tarifa():
     engine = obtener_motor()
@@ -125,7 +130,7 @@ st.set_page_config(
 )
 
 # ==========================================
-# GESTIÓN DE ESTADOS PARA PERSONALIZACIÓN
+# GESTIÓN DE ESTADOS PARA PERSONALIZACIÓN Y DATOS
 # ==========================================
 if "custom_title" not in st.session_state:
     st.session_state.custom_title = "🚜 SISTEMA DE CONTROL DE DÍAS DE TALLER - FLETES AVE"
@@ -140,6 +145,10 @@ if "cover_alignment" not in st.session_state:
 if "header_alignment" not in st.session_state:
     st.session_state.header_alignment = "Izquierda"
 
+# Sincronizar operadores en sesión para evitar pérdidas visuales
+if "lista_operadores" not in st.session_state:
+    st.session_state.lista_operadores = cargar_operadores_db()
+
 # --- RENDERIZADO DINÁMICO DE PORTADA ---
 if st.session_state.custom_cover is not None:
     ancho_portada = st.session_state.cover_width
@@ -148,7 +157,6 @@ if st.session_state.custom_cover is not None:
     if ancho_portada == 100:
         st.image(st.session_state.custom_cover, use_container_width=True)
     else:
-        # Calcular columnas según la alineación elegida
         if alineacion_portada == "Centro":
             col_izq, col_img, col_der = st.columns([
                 (100 - ancho_portada) / 200,
@@ -232,7 +240,8 @@ if perfil == "1. Capturista":
     st.subheader("📝 Módulo: Capturista (Registro Inicial)")
     st.markdown("Todos los campos marcados con asterisco (**\***) son **obligatorios** para poder registrar la información.")
 
-    lista_operadores = cargar_operadores()
+    # Usar la lista en sesión sincronizada
+    lista_operadores = st.session_state.lista_operadores
     valor_unitario_actual = obtener_tarifa()
 
     col1, col2 = st.columns(2)
@@ -304,7 +313,7 @@ elif perfil == "2. Jefe de Operaciones (Admin)":
         st.write("Gestione autorizaciones operativas, catálogo de operadores, tarifas, edición de registros y descargas.")
 
         registros = cargar_registros()
-        lista_operadores = cargar_operadores()
+        lista_operadores = st.session_state.lista_operadores
         valor_unitario_actual = obtener_tarifa()
 
         tab1, tab2, tab3, tab4, tab5 = st.tabs([
@@ -391,17 +400,23 @@ elif perfil == "2. Jefe de Operaciones (Admin)":
             nuevo_operador_nombre = st.text_input("Nombre del Nuevo Operador:", key="input_nuevo_op")
             if st.button("Registrar Operador"):
                 if nuevo_operador_nombre.strip():
-                    try:
-                        engine = obtener_motor()
-                        with engine.begin() as conn:
-                            conn.execute(
-                                text("INSERT INTO operadores (nombre) VALUES (:nombre)"),
-                                {"nombre": str(nuevo_operador_nombre.strip())}
-                            )
-                        st.success(f"✅ Operador '{nuevo_operador_nombre.strip()}' agregado correctamente.")
-                        st.rerun()
-                    except Exception:
-                        st.warning("⚠️ Este operador ya se encuentra registrado.")
+                    nombre_limpio = nuevo_operador_nombre.strip()
+                    if nombre_limpio not in st.session_state.lista_operadores:
+                        try:
+                            engine = obtener_motor()
+                            with engine.begin() as conn:
+                                conn.execute(
+                                    text("INSERT INTO operadores (nombre) VALUES (:nombre)"),
+                                    {"nombre": str(nombre_limpio)}
+                                )
+                            # Actualizar lista en sesión de inmediato
+                            st.session_state.lista_operadores = cargar_operadores_db()
+                            st.success(f"✅ Operador '{nombre_limpio}' agregado correctamente.")
+                            st.rerun()
+                        except Exception:
+                            st.warning("⚠️ Este operador ya se encuentra registrado en la base de datos.")
+                    else:
+                        st.warning("⚠️ Este operador ya está en la lista.")
                 else:
                     st.error("⚠️ Ingrese un nombre válido para el operador.")
 
@@ -419,6 +434,8 @@ elif perfil == "2. Jefe de Operaciones (Admin)":
                                 text("DELETE FROM operadores WHERE nombre = :nombre"),
                                 {"nombre": str(operador_a_eliminar)}
                             )
+                        # Actualizar lista en sesión de inmediato
+                        st.session_state.lista_operadores = cargar_operadores_db()
                         st.success(f"🗑️ El operador '{operador_a_eliminar}' ha sido eliminado correctamente.")
                         st.rerun()
                     else:
@@ -426,7 +443,7 @@ elif perfil == "2. Jefe de Operaciones (Admin)":
 
             st.markdown("---")
             st.markdown("#### 📋 Operadores Actuales Registrados:")
-            st.write(", ".join(lista_operadores))
+            st.write(", ".join(st.session_state.lista_operadores))
 
         with tab3:
             st.markdown("### 🛠️ Modificar o Eliminar Registros Existentes")
@@ -531,7 +548,6 @@ elif perfil == "2. Jefe de Operaciones (Admin)":
             with st.form("form_personalizacion_visual"):
                 nuevo_titulo_input = st.text_input("Editar Título Principal:", value=st.session_state.custom_title)
                 
-                # Selector de alineación del Título y Logotipo
                 opciones_alineacion = ["Izquierda", "Centro", "Derecha"]
                 idx_header_actual = opciones_alineacion.index(st.session_state.header_alignment) if st.session_state.header_alignment in opciones_alineacion else 0
                 nueva_alineacion_header = st.selectbox("Alineación del Título y Logotipo:", opciones_alineacion, index=idx_header_actual)
