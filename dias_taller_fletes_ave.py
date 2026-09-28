@@ -11,21 +11,27 @@ from sqlalchemy import create_engine, text
 @st.cache_resource
 def obtener_motor():
     """
-    Crea y retorna un motor de SQLAlchemy optimizado y cacheado para Supabase,
-    incorporando pool_pre_ping y connect_args para prevenir errores con el pooler.
+    Crea y retorna un motor de SQLAlchemy robusto para Supabase,
+    asegurando el uso de psycopg2-binary y los parámetros SSL correctos.
     """
     db_url = st.secrets["postgres"]["url"]
-    if not db_url.startswith("postgresql+psycopg2://"):
-        db_url = db_url.replace("postgresql://", "postgresql+psycopg2://")
-    if "sslmode" not in db_url:
+    
+    # Asegurar el uso de psycopg2
+    if db_url.startswith("postgresql://"):
+        db_url = db_url.replace("postgresql://", "postgresql+psycopg2://", 1)
+    elif not db_url.startswith("postgresql+psycopg2://"):
+        db_url = f"postgresql+psycopg2://{db_url}"
+        
+    # Añadir parámetros de SSL obligatorios si no están presentes
+    if "sslmode=" not in db_url:
         separator = "&" if "?" in db_url else "?"
         db_url = f"{db_url}{separator}sslmode=require"
         
     engine = create_engine(
         db_url, 
         pool_pre_ping=True,
-        pool_recycle=300,
-        connect_args={"prepare_threshold": None}
+        pool_recycle=180,
+        connect_args={"sslmode": "require"}
     )
     return engine
 
@@ -33,52 +39,55 @@ def init_db():
     """
     Inicializa las tablas necesarias en Supabase si no existen.
     """
-    engine = obtener_motor()
+    try:
+        engine = obtener_motor()
+        with engine.begin() as conn:
+            # Tabla de Registros de Taller
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS registros (
+                    id SERIAL PRIMARY KEY,
+                    fecha_creacion TEXT,
+                    operador TEXT,
+                    actividades TEXT,
+                    dias DOUBLE PRECISION,
+                    valor_unitario DOUBLE PRECISION,
+                    total DOUBLE PRECISION,
+                    estado TEXT,
+                    fecha_aprobacion_operaciones TEXT,
+                    fecha_aprobacion_gerencia TEXT,
+                    evidencia BYTEA
+                )
+            """))
 
-    with engine.begin() as conn:
-        # Tabla de Registros de Taller
-        conn.execute(text("""
-            CREATE TABLE IF NOT EXISTS registros (
-                id SERIAL PRIMARY KEY,
-                fecha_creacion TEXT,
-                operador TEXT,
-                actividades TEXT,
-                dias DOUBLE PRECISION,
-                valor_unitario DOUBLE PRECISION,
-                total DOUBLE PRECISION,
-                estado TEXT,
-                fecha_aprobacion_operaciones TEXT,
-                fecha_aprobacion_gerencia TEXT,
-                evidencia BYTEA
-            )
-        """))
+            # Tabla de Operadores
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS operadores (
+                    nombre TEXT UNIQUE
+                )
+            """))
 
-        # Tabla de Operadores
-        conn.execute(text("""
-            CREATE TABLE IF NOT EXISTS operadores (
-                nombre TEXT UNIQUE
-            )
-        """))
+            # Tabla de Configuración (Tarifa)
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS config (
+                    clave TEXT UNIQUE,
+                    valor DOUBLE PRECISION
+                )
+            """))
 
-        # Tabla de Configuración (Tarifa)
-        conn.execute(text("""
-            CREATE TABLE IF NOT EXISTS config (
-                clave TEXT UNIQUE,
-                valor DOUBLE PRECISION
-            )
-        """))
+            # Insertar valores iniciales si están vacíos los operadores
+            result = conn.execute(text("SELECT COUNT(*) FROM operadores")).fetchone()
+            if result[0] == 0:
+                conn.execute(text("INSERT INTO operadores (nombre) VALUES (:nombre)"), {"nombre": "Octavio Rodrigo Serrano Saavedra"})
+                conn.execute(text("INSERT INTO operadores (nombre) VALUES (:nombre)"), {"nombre": "Operador 1"})
+                conn.execute(text("INSERT INTO operadores (nombre) VALUES (:nombre)"), {"nombre": "Operador 2"})
 
-        # Insertar valores iniciales si están vacíos los operadores
-        result = conn.execute(text("SELECT COUNT(*) FROM operadores")).fetchone()
-        if result[0] == 0:
-            conn.execute(text("INSERT INTO operadores (nombre) VALUES (:nombre)"), {"nombre": "Octavio Rodrigo Serrano Saavedra"})
-            conn.execute(text("INSERT INTO operadores (nombre) VALUES (:nombre)"), {"nombre": "Operador 1"})
-            conn.execute(text("INSERT INTO operadores (nombre) VALUES (:nombre)"), {"nombre": "Operador 2"})
-
-        # Insertar valor inicial de la tarifa si no existe
-        result_config = conn.execute(text("SELECT COUNT(*) FROM config WHERE clave = 'valor_dia'")).fetchone()
-        if result_config[0] == 0:
-            conn.execute(text("INSERT INTO config (clave, valor) VALUES ('valor_dia', 416.67)"))
+            # Insertar valor inicial de la tarifa si no existe
+            result_config = conn.execute(text("SELECT COUNT(*) FROM config WHERE clave = 'valor_dia'")).fetchone()
+            if result_config[0] == 0:
+                conn.execute(text("INSERT INTO config (clave, valor) VALUES ('valor_dia', 416.67)"))
+    except Exception as e:
+        st.error(f"❌ Error al conectar o inicializar la base de datos en Supabase: {e}")
+        st.stop()
 
 init_db()
 
@@ -303,7 +312,7 @@ elif perfil == "2. Jefe de Operaciones (Admin)":
                                 {
                                     "val_unit": nuevo_val_unit,
                                     "tot": nuevo_total,
-                                    "est": "Pendiente de Aprobación (Gerencia)",
+                                    "estado": "Pendiente de Aprobación (Gerencia)",
                                     "f_op": fecha_op,
                                     "rid": reg_id
                                 }
