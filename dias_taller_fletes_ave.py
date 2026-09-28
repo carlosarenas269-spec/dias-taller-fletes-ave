@@ -22,10 +22,12 @@ def init_db():
     """
     Inicializa las tablas necesarias en Supabase si no existen.
     """
-   db_url = st.secrets["db_url"]
+    db_url = st.secrets["postgres"]["url"]
     engine = create_engine(db_url, connect_args={"prepare_threshold": None})
-    
+
     with engine.begin() as conn:
+        # Tabla de Registros de Taller
+        conn.execute(pd.text("""
         # Tabla de Registros de Taller
         conn.execute(pd.text("""
             CREATE TABLE IF NOT EXISTS registros (
