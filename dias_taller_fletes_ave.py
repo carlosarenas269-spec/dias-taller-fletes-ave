@@ -14,14 +14,10 @@ def obtener_conexion():
     Crea la conexión a Supabase usando la URL guardada en los secretos de Streamlit.
     """
     db_url = st.secrets["postgres"]["url"]
-    # Usamos SQLAlchemy para mantener compatibilidad con pd.read_sql
     engine = create_engine(db_url)
     return engine.connect()
 
 def init_db():
-    """
-    Inicializa las tablas necesarias en Supabase si no existen.
-   def init_db():
     """
     Inicializa las tablas necesarias en Supabase si no existen.
     """
@@ -38,28 +34,6 @@ def init_db():
                 actividades TEXT,
                 dias DOUBLE PRECISION,
                 valor_unitario DOUBLE PRECISION,
-                total DOUBLE PRECISION,
-                estado TEXT,
-                fecha_aprobacion_operaciones TEXT,
-                fecha_aprobacion_gerencia TEXT,
-                evidencia BYTEA
-            )
-        """))
-
-        # Tabla de Operadores
-        conn.execute(pd.text("""
-            CREATE TABLE IF NOT EXISTS operadores (
-                nombre TEXT UNIQUE
-            )
-        """))
-
-        # Tabla de Configuración (Tarifa)
-        conn.execute(pd.text("""
-            CREATE TABLE IF NOT EXISTS config (
-                clave TEXT UNIQUE,
-                valor DOUBLE PRECISION
-            )
-        """))
                 total DOUBLE PRECISION,
                 estado TEXT,
                 fecha_aprobacion_operaciones TEXT,
@@ -113,7 +87,6 @@ def obtener_tarifa():
 def cargar_registros():
     engine = create_engine(st.secrets["postgres"]["url"])
     df = pd.read_sql("SELECT * FROM registros", engine)
-    # Convertir BYTEA de Postgres a bytes legibles en python si es necesario
     return df.to_dict("records")
 
 st.set_page_config(
