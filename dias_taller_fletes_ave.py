@@ -12,7 +12,7 @@ from sqlalchemy import create_engine, text
 def obtener_motor():
     """
     Crea y retorna un motor de SQLAlchemy optimizado y cacheado para Supabase,
-    incorporando pool_pre_ping para prevenir desconexiones y OperationalErrors.
+    incorporando pool_pre_ping y connect_args para prevenir errores con el pooler.
     """
     db_url = st.secrets["postgres"]["url"]
     if not db_url.startswith("postgresql+psycopg2://"):
@@ -24,7 +24,8 @@ def obtener_motor():
     engine = create_engine(
         db_url, 
         pool_pre_ping=True,
-        pool_recycle=300
+        pool_recycle=300,
+        connect_args={"prepare_threshold": None}
     )
     return engine
 
