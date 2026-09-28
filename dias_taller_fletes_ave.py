@@ -135,27 +135,62 @@ if "custom_cover" not in st.session_state:
     st.session_state.custom_cover = None
 if "cover_width" not in st.session_state:
     st.session_state.cover_width = 100
+if "cover_alignment" not in st.session_state:
+    st.session_state.cover_alignment = "Centro"
+if "header_alignment" not in st.session_state:
+    st.session_state.header_alignment = "Izquierda"
 
-# --- RENDERIZADO DINÁMICO DE PORTADA Y TÍTULO ---
+# --- RENDERIZADO DINÁMICO DE PORTADA ---
 if st.session_state.custom_cover is not None:
     ancho_portada = st.session_state.cover_width
+    alineacion_portada = st.session_state.cover_alignment
+    
     if ancho_portada == 100:
         st.image(st.session_state.custom_cover, use_container_width=True)
     else:
-        _, col_img, _ = st.columns([
-            (100 - ancho_portada) / 200,
-            ancho_portada / 100,
-            (100 - ancho_portada) / 200,
-        ])
-        with col_img:
-            st.image(st.session_state.custom_cover, use_container_width=True)
+        # Calcular columnas según la alineación elegida
+        if alineacion_portada == "Centro":
+            col_izq, col_img, col_der = st.columns([
+                (100 - ancho_portada) / 200,
+                ancho_portada / 100,
+                (100 - ancho_portada) / 200,
+            ])
+            with col_img:
+                st.image(st.session_state.custom_cover, use_container_width=True)
+        elif alineacion_portada == "Izquierda":
+            col_img, col_der = st.columns([ancho_portada / 100, 1 - (ancho_portada / 100)])
+            with col_img:
+                st.image(st.session_state.custom_cover, use_container_width=True)
+        else: # Derecha
+            col_izq, col_img = st.columns([1 - (ancho_portada / 100), ancho_portada / 100])
+            with col_img:
+                st.image(st.session_state.custom_cover, use_container_width=True)
 
-col_logo_h, col_tit_h = st.columns([0.08, 0.92])
-with col_logo_h:
+# --- RENDERIZADO DINÁMICO DE LOGOTIPO Y TÍTULO ---
+alineacion_header = st.session_state.header_alignment
+
+if alineacion_header == "Centro":
     if st.session_state.custom_logo is not None:
-        st.image(st.session_state.custom_logo, width=60)
-with col_tit_h:
-    st.title(st.session_state.custom_title)
+        col_c1, col_c2, col_c3 = st.columns([1, 0.2, 1])
+        with col_c2:
+            st.image(st.session_state.custom_logo, width=60)
+    st.markdown(f"<h1 style='text-align: center;'>{st.session_state.custom_title}</h1>", unsafe_allow_html=True)
+
+elif alineacion_header == "Derecha":
+    col_t, col_l = st.columns([0.92, 0.08])
+    with col_t:
+        st.markdown(f"<h1 style='text-align: right;'>{st.session_state.custom_title}</h1>", unsafe_allow_html=True)
+    with col_l:
+        if st.session_state.custom_logo is not None:
+            st.image(st.session_state.custom_logo, width=60)
+
+else: # Izquierda (Por defecto)
+    col_logo_h, col_tit_h = st.columns([0.08, 0.92])
+    with col_logo_h:
+        if st.session_state.custom_logo is not None:
+            st.image(st.session_state.custom_logo, width=60)
+    with col_tit_h:
+        st.title(st.session_state.custom_title)
 
 # Selector de Perfil / Rol en la barra lateral
 st.sidebar.header("🔐 Control de Acceso y Perfiles")
@@ -495,6 +530,11 @@ elif perfil == "2. Jefe de Operaciones (Admin)":
 
             with st.form("form_personalizacion_visual"):
                 nuevo_titulo_input = st.text_input("Editar Título Principal:", value=st.session_state.custom_title)
+                
+                # Selector de alineación del Título y Logotipo
+                opciones_alineacion = ["Izquierda", "Centro", "Derecha"]
+                idx_header_actual = opciones_alineacion.index(st.session_state.header_alignment) if st.session_state.header_alignment in opciones_alineacion else 0
+                nueva_alineacion_header = st.selectbox("Alineación del Título y Logotipo:", opciones_alineacion, index=idx_header_actual)
 
                 st.markdown("---")
                 subir_logo = st.file_uploader("Cargar Logotipo de la Empresa (PNG/JPG):", type=["png", "jpg", "webp"], key="up_logo")
@@ -502,8 +542,11 @@ elif perfil == "2. Jefe de Operaciones (Admin)":
                 st.markdown("---")
                 subir_portada = st.file_uploader("Cargar Imagen de Portada (PNG/JPG):", type=["png", "jpg", "webp"], key="up_cover")
 
-                st.markdown("#### 📐 Ajustar Tamaño de la Imagen de Portada")
+                st.markdown("#### 📐 Ajustar Tamaño y Alineación de la Imagen de Portada")
                 nuevo_ancho_portada = st.slider("Ancho de la portada (%):", min_value=20, max_value=100, value=st.session_state.cover_width, step=5)
+                
+                idx_cover_actual = opciones_alineacion.index(st.session_state.cover_alignment) if st.session_state.cover_alignment in opciones_alineacion else 1
+                nueva_alineacion_portada = st.selectbox("Alineación de la Portada:", opciones_alineacion, index=idx_cover_actual)
 
                 st.markdown("---")
                 btn_guardar_visual = st.form_submit_button("💾 Guardar Cambios Visuales", type="primary")
@@ -511,6 +554,8 @@ elif perfil == "2. Jefe de Operaciones (Admin)":
                 if btn_guardar_visual:
                     st.session_state.custom_title = nuevo_titulo_input
                     st.session_state.cover_width = nuevo_ancho_portada
+                    st.session_state.cover_alignment = nueva_alineacion_portada
+                    st.session_state.header_alignment = nueva_alineacion_header
 
                     if subir_logo is not None:
                         st.session_state.custom_logo = subir_logo
