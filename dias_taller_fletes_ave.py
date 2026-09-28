@@ -3,15 +3,16 @@ import io
 from zoneinfo import ZoneInfo
 import pandas as pd
 import streamlit as st
-import psycopg2
 from sqlalchemy import create_engine
 
 # ==========================================
 # CONFIGURACIÓN DE LA BASE DE DATOS SUPABASE (POSTGRESQL)
 # ==========================================
+@st.cache_resource
 def obtener_motor():
     """
-    Crea y retorna un motor de SQLAlchemy optimizado para Supabase con pool_pre_ping.
+    Crea y retorna un motor de SQLAlchemy optimizado y cacheado para Supabase,
+    incorporando pool_pre_ping para prevenir desconexiones y OperationalErrors.
     """
     db_url = st.secrets["postgres"]["url"]
     if not db_url.startswith("postgresql+psycopg2://"):
