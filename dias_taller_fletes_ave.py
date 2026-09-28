@@ -230,7 +230,7 @@ if perfil == "1. Capturista":
         elif evidencia is None:
             st.error("⚠️ Debe adjuntar una **Evidencia (Imagen/Fotografía)** obligatoria para poder continuar.")
         else:
-            total_taller = float(dias_taller) * valor_unitario_actual
+            total_taller = float(dias_taller) * float(valor_unitario_actual)
             fecha_creacion = datetime.now(ZoneInfo("America/Monterrey")).strftime("%Y-%m-%d %H:%M")
             estado_inicial = "Pendiente de Aprobación (Operaciones)"
             evidencia_bytes = evidencia.read()
@@ -244,12 +244,12 @@ if perfil == "1. Capturista":
                     """),
                     {
                         "fecha_creacion": fecha_creacion,
-                        "operador": operador,
-                        "actividades": actividades,
+                        "operador": str(operador),
+                        "actividades": str(actividades),
                         "dias": float(dias_taller),
-                        "valor_unitario": valor_unitario_actual,
-                        "total": total_taller,
-                        "estado": estado_inicial,
+                        "valor_unitario": float(valor_unitario_actual),
+                        "total": float(total_taller),
+                        "estado": str(estado_inicial),
                         "fecha_op": "",
                         "fecha_ger": "",
                         "evidencia": evidencia_bytes
@@ -282,7 +282,7 @@ elif perfil == "2. Jefe de Operaciones (Admin)":
 
         with tab1:
             pendientes_ops = [
-                r["id"] for r in registros
+                int(r["id"]) for r in registros
                 if r["estado"] == "Pendiente de Aprobación (Operaciones)"
             ]
 
@@ -290,7 +290,7 @@ elif perfil == "2. Jefe de Operaciones (Admin)":
                 st.success("🎉 No hay registros pendientes de autorización por parte de Operaciones.")
             else:
                 reg_id = st.selectbox("Seleccione el ID del Registro a Autorizar:", pendientes_ops, key="auth_op")
-                reg_sel = next((r for r in registros if r["id"] == reg_id), None)
+                reg_sel = next((r for r in registros if int(r["id"]) == int(reg_id)), None)
 
                 if reg_sel:
                     st.write(f"**Operador:** {reg_sel['operador']}")
@@ -308,7 +308,7 @@ elif perfil == "2. Jefe de Operaciones (Admin)":
                         format="%.2f",
                         key="val_unit_auth",
                     )
-                    nuevo_total = reg_sel["dias"] * nuevo_val_unit
+                    nuevo_total = float(reg_sel["dias"]) * float(nuevo_val_unit)
                     st.write(f"**Total Ajustado:** ${nuevo_total:,.2f} MXN")
 
                     if st.button("✔️ Autorizar como Jefe de Operaciones"):
@@ -322,11 +322,11 @@ elif perfil == "2. Jefe de Operaciones (Admin)":
                                     WHERE id = :rid
                                 """),
                                 {
-                                    "val_unit": nuevo_val_unit,
-                                    "tot": nuevo_total,
-                                    "estado": "Pendiente de Aprobación (Gerencia)",
-                                    "f_op": fecha_op,
-                                    "rid": reg_id
+                                    "val_unit": float(nuevo_val_unit),
+                                    "tot": float(nuevo_total),
+                                    "est": "Pendiente de Aprobación (Gerencia)",
+                                    "f_op": str(fecha_op),
+                                    "rid": int(reg_id)
                                 }
                             )
                         st.success(f"¡Registro #{reg_id} autorizado por Operaciones! Ahora pasó al módulo de Gerencia.")
@@ -346,7 +346,7 @@ elif perfil == "2. Jefe de Operaciones (Admin)":
                 with engine.begin() as conn:
                     conn.execute(
                         text("UPDATE config SET valor = :val WHERE clave = 'valor_dia'"),
-                        {"val": nuevo_costo_base}
+                        {"val": float(nuevo_costo_base)}
                     )
                 st.success(f"✅ Tarifa estándar actualizada a ${nuevo_costo_base:,.2f} MXN.")
                 st.rerun()
@@ -361,7 +361,7 @@ elif perfil == "2. Jefe de Operaciones (Admin)":
                         with engine.begin() as conn:
                             conn.execute(
                                 text("INSERT INTO operadores (nombre) VALUES (:nombre)"),
-                                {"nombre": nuevo_operador_nombre.strip()}
+                                {"nombre": str(nuevo_operador_nombre.strip())}
                             )
                         st.success(f"✅ Operador '{nuevo_operador_nombre.strip()}' agregado correctamente.")
                         st.rerun()
@@ -382,7 +382,7 @@ elif perfil == "2. Jefe de Operaciones (Admin)":
                         with engine.begin() as conn:
                             conn.execute(
                                 text("DELETE FROM operadores WHERE nombre = :nombre"),
-                                {"nombre": operador_a_eliminar}
+                                {"nombre": str(operador_a_eliminar)}
                             )
                         st.success(f"🗑️ El operador '{operador_a_eliminar}' ha sido eliminado correctamente.")
                         st.rerun()
@@ -398,10 +398,10 @@ elif perfil == "2. Jefe de Operaciones (Admin)":
             if not registros:
                 st.info("ℹ️ No hay registros en la base de datos.")
             else:
-                ids_disponibles = [r["id"] for r in registros]
+                ids_disponibles = [int(r["id"]) for r in registros]
                 id_a_editar = st.selectbox("Seleccione el ID del Registro a Editar o Eliminar:", ids_disponibles, key="edit_del_id")
 
-                registro_encontrado = next((r for r in registros if r["id"] == id_a_editar), None)
+                registro_encontrado = next((r for r in registros if int(r["id"]) == int(id_a_editar)), None)
 
                 if registro_encontrado:
                     img_procesada_edit = preparar_imagen(registro_encontrado["evidencia"])
@@ -434,12 +434,12 @@ elif perfil == "2. Jefe de Operaciones (Admin)":
                                         WHERE id = :rid
                                     """),
                                     {
-                                        "op": op_edit,
+                                        "op": str(op_edit),
                                         "dias": float(dias_edit),
-                                        "act": act_edit,
+                                        "act": str(act_edit),
                                         "vu": float(val_unit_edit),
-                                        "tot": nuevo_total,
-                                        "rid": id_a_editar
+                                        "tot": float(nuevo_total),
+                                        "rid": int(id_a_editar)
                                     }
                                 )
                             st.success(f"✅ ¡Registro #{id_a_editar} actualizado con éxito!")
@@ -450,7 +450,7 @@ elif perfil == "2. Jefe de Operaciones (Admin)":
                             with engine.begin() as conn:
                                 conn.execute(
                                     text("DELETE FROM registros WHERE id = :rid"),
-                                    {"rid": id_a_editar}
+                                    {"rid": int(id_a_editar)}
                                 )
                             st.success(f"🗑️ ¡Registro #{id_a_editar} eliminado correctamente!")
                             st.rerun()
@@ -555,7 +555,7 @@ elif perfil == "3. Gerente":
 
         registros = cargar_registros()
         pendientes_gerencia = [
-            r["id"] for r in registros
+            int(r["id"]) for r in registros
             if r["estado"] == "Pendiente de Aprobación (Gerencia)"
         ]
 
@@ -563,7 +563,7 @@ elif perfil == "3. Gerente":
             st.info("ℹ️ No hay registros pendientes de autorización gerencial en este momento.")
         else:
             reg_id_ger = st.selectbox("Seleccione el ID del Registro para Visto Bueno Gerencial:", pendientes_gerencia, key="ger_auth")
-            reg_sel_ger = next((r for r in registros if r["id"] == reg_id_ger), None)
+            reg_sel_ger = next((r for r in registros if int(r["id"]) == int(reg_id_ger)), None)
 
             if reg_sel_ger:
                 st.write(f"**Operador:** {reg_sel_ger['operador']}")
@@ -589,8 +589,8 @@ elif perfil == "3. Gerente":
                             """),
                             {
                                 "est": "Completado y Autorizado (Gerencia)",
-                                "f_ger": fecha_ger,
-                                "rid": reg_id_ger
+                                "f_ger": str(fecha_ger),
+                                "rid": int(reg_id_ger)
                             }
                         )
                     st.success(f"🎉 ¡El registro #{reg_id_ger} ha sido totalmente autorizado por Gerencia!")
